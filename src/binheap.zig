@@ -12,7 +12,7 @@ const branch_factor = 2;
 /// an i32 which will be used to determine the ordering
 /// within the heap. Inverting the sign of the evaluations
 /// will implement a max heap.
-pub fn minHeap(comptime T: type, comptime F: fn (T) i32) type {
+pub fn minHeap(comptime T: type, comptime F: fn (T, T) bool) type {
     return struct {
         count: usize,
         store: []T,
@@ -127,7 +127,7 @@ pub fn minHeap(comptime T: type, comptime F: fn (T) i32) type {
 
             const parent_ix = try self.get_parent(ix);
 
-            if (F(self.store[parent_ix]) <= F(self.store[ix])) {
+            if (F(self.store[parent_ix], self.store[ix])) {
                 return;
             }
 
@@ -150,19 +150,19 @@ pub fn minHeap(comptime T: type, comptime F: fn (T) i32) type {
             if (a_ix >= self.count) {
                 return;
             } else if (b_ix >= self.count) {
-                if (F(self.store[a_ix]) < F(self.store[root_ix])) {
+                if (F(self.store[a_ix], self.store[root_ix])) {
                     const tmp = self.store[a_ix];
                     self.store[a_ix] = self.store[root_ix];
                     self.store[root_ix] = tmp;
                 }
-            } else if (F(self.store[a_ix]) <= F(self.store[b_ix])) {
-                if (F(self.store[a_ix]) < F(self.store[root_ix])) {
+            } else if (F(self.store[a_ix], self.store[b_ix])) {
+                if (F(self.store[a_ix], self.store[root_ix])) {
                     const tmp = self.store[a_ix];
                     self.store[a_ix] = self.store[root_ix];
                     self.store[root_ix] = tmp;
                     try self.sink_down(a_ix);
                 }
-            } else if (F(self.store[b_ix]) < F(self.store[root_ix])) {
+            } else if (F(self.store[b_ix], self.store[root_ix])) {
                 const tmp = self.store[b_ix];
                 self.store[b_ix] = self.store[root_ix];
                 self.store[root_ix] = tmp;
@@ -172,13 +172,13 @@ pub fn minHeap(comptime T: type, comptime F: fn (T) i32) type {
     };
 }
 
-fn u32_to_i32(num: u32) i32 {
-    return @bitCast(i32, num -% (1 << 31));
+fn u32_comp(a: u32, b: u32) bool {
+    return a < b;
 }
 
 test "Sorting an existing array slice" {
     var data = [_]u32{ 12, 6, 18, 19, 13 };
-    var heap = try minHeap(u32, u32_to_i32).init(data[0..data.len]);
+    var heap = try minHeap(u32, u32_comp).init(data[0..data.len]);
     try testing.expectEqual(@as(usize, 5), heap.count);
     try testing.expectEqual(@as(u32, 6), try heap.pop_root());
     try testing.expectEqual(@as(u32, 12), try heap.pop_root());
