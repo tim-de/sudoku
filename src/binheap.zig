@@ -1,19 +1,10 @@
 const std = @import("std");
 const Allocator = std.mem.Allocator;
+const testing = std.testing;
 
-const nodeRelative = enum {
-    child_a,
-    child_b,
-    parent,
-};
-
-fn get_relative_index(ix: usize, relation: nodeRelative) usize {
-    return switch (relation) {
-        .child_a => (ix * 2) + 1,
-        .child_b => (ix * 2) + 2,
-        .parent => (ix - 1) >> 1,
-    };
-}
+/// Number of children per node. To be replaced with an
+/// integral part of a d-ary heap type later.
+const branch_factor = 2;
 
 /// An implementation of a binary heap storing type T and
 /// capable of holding C elements. Must be provided with
@@ -101,6 +92,19 @@ pub fn minHeap(comptime T: type, comptime F: fn (T) i32) type {
             }
         }
 
+        fn get_parent(self: *minHeap(T, F), ix: usize) !usize {
+            _ = self;
+            return try (ix - 1) / branch_factor;
+        }
+
+        fn get_child(self: *minHeap(T, F), ix: usize, n_child: usize) !usize {
+            _ = self;
+            if (n_child >= branch_factor) {
+                return error.InvalidChildNumber;
+            }
+            return (ix * branch_factor) + 1 + n_child;
+        }
+
         /// Sorts the heap, ensuring that the heap property is satisfied.
         fn heapify(self: *minHeap(T, F)) !void {
             var ix = self.count >> 1;
@@ -121,7 +125,7 @@ pub fn minHeap(comptime T: type, comptime F: fn (T) i32) type {
                 return;
             }
 
-            const parent_ix = get_relative_index(ix, .parent);
+            const parent_ix = try self.get_parent(ix);
 
             if (F(self.store[parent_ix]) <= F(self.store[ix])) {
                 return;
@@ -140,8 +144,8 @@ pub fn minHeap(comptime T: type, comptime F: fn (T) i32) type {
             if (root_ix >= self.count) {
                 return error.IndexOutOfRange;
             }
-            const a_ix = get_relative_index(root_ix, .child_a);
-            const b_ix = get_relative_index(root_ix, .child_b);
+            const a_ix = try self.get_child(root_ix, 0);
+            const b_ix = try self.get_child(root_ix, 1);
 
             if (a_ix >= self.count) {
                 return;
@@ -166,4 +170,20 @@ pub fn minHeap(comptime T: type, comptime F: fn (T) i32) type {
             }
         }
     };
+}
+
+fn u32_to_i32(num: u32) i32 {
+    return @bitCast(i32, num -% (1 << 31));
+}
+
+test "Sorting an existing array slice" {
+    var data = [_]u32{ 12, 6, 18, 19, 13 };
+    var heap = try minHeap(u32, u32_to_i32).init(data[0..data.len]);
+    try testing.expectEqual(@as(usize, 5), heap.count);
+    try testing.expectEqual(@as(u32, 6), try heap.pop_root());
+    try testing.expectEqual(@as(u32, 12), try heap.pop_root());
+    try testing.expectEqual(@as(u32, 13), try heap.pop_root());
+    try testing.expectEqual(@as(u32, 18), try heap.pop_root());
+    try testing.expectEqual(@as(u32, 19), try heap.pop_root());
+    try testing.expectEqual(@as(usize, 0), heap.count);
 }
