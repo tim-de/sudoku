@@ -7,8 +7,8 @@ however, it's just data structure implementation!
 This is still in a fairly early stage, and it kind of works,
 but there are significant changes I would like to make.
 
-## To-do list
-- [ ] Replace minHeap's evaluation function with a comparison
+### To-do list
+- [x] Replace minHeap's evaluation function with a comparison
 used to evaluate priority
 	- [ ] maybe then rename it as it won't be
    strictly a min heap
