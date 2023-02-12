@@ -107,7 +107,7 @@ pub fn minHeap(comptime T: type, comptime F: fn (T, T) bool) type {
 
         /// Sorts the heap, ensuring that the heap property is satisfied.
         fn heapify(self: *minHeap(T, F)) !void {
-            var ix = self.count >> 1;
+            var ix = self.count / branch_factor;
             while (ix > 0) {
                 ix -= 1;
                 try self.sink_down(ix);
