@@ -17,5 +17,7 @@ of several different parameters, which are a bit messy.
 - [ ] Work out how to handle indices into the heap, if they are
 exposed to the user (if so how) or not (and how to handle
 increase-key &c. in this case)
-- [ ] Add the capacity to supply an order for the heap at compile
-time, implementing a more general d-ary/dway heap.
+- [ ] Add the capacity to supply a branch factor for the heap
+at compile time, implementing a more general d-ary/dway heap.
+	- [x] Replace the relative index function so that more than
+	two children can be indexed if the heap supports it.
