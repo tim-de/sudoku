@@ -12,7 +12,7 @@ but there are significant changes I would like to make.
 used to evaluate priority
 	- [ ] maybe then rename it as it won't be
    strictly a min heap
-- [ ] Refactor minHeap to use a struct as an argument instead
+- [x] Refactor minHeap to use a struct as an argument instead
 of several different parameters, which are a bit messy.
 - [ ] Work out how to handle indices into the heap, if they are
 exposed to the user (if so how) or not (and how to handle
