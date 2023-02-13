@@ -113,6 +113,32 @@ pub fn minHeap(comptime S: struct {
             return (ix * branch_factor) + 1 + n_child;
         }
 
+        /// Returns the index in the heap of the child of root_ix with the
+        /// highest priority
+        fn get_max_child_ix(self: *minHeap(S), root_ix: usize) usize {
+            const first_child_ix = (root_ix * branch_factor) + 1;
+            const last_child_ix = if ((root_ix + 1) * branch_factor < self.count)
+                (root_ix + 1) * branch_factor
+            else
+                self.count - 1;
+
+            const children = self.store[first_child_ix..last_child_ix];
+            var max_ix: usize = 0;
+            for (children) |child, ix| {
+                if (S.compare(child, children[max_ix])) {
+                    max_ix = ix;
+                }
+            }
+            return max_ix + first_child_ix;
+        }
+
+        /// Returns true if the node at ix has no children
+        /// (index of children is outside the range used
+        /// by the heap)
+        fn is_childless(self: *minHeap(S), ix: usize) bool {
+            return (ix * branch_factor) + 1 >= self.count;
+        }
+
         /// Sorts the heap, ensuring that the heap property is satisfied.
         fn heapify(self: *minHeap(S)) !void {
             var ix = self.count / branch_factor;
@@ -152,29 +178,18 @@ pub fn minHeap(comptime S: struct {
             if (root_ix >= self.count) {
                 return error.IndexOutOfRange;
             }
-            const a_ix = try self.get_child(root_ix, 0);
-            const b_ix = try self.get_child(root_ix, 1);
-
-            if (a_ix >= self.count) {
+            // Replacement node comparison
+            if (self.is_childless(root_ix)) {
                 return;
-            } else if (b_ix >= self.count) {
-                if (S.compare(self.store[a_ix], self.store[root_ix])) {
-                    const tmp = self.store[a_ix];
-                    self.store[a_ix] = self.store[root_ix];
-                    self.store[root_ix] = tmp;
-                }
-            } else if (S.compare(self.store[a_ix], self.store[b_ix])) {
-                if (S.compare(self.store[a_ix], self.store[root_ix])) {
-                    const tmp = self.store[a_ix];
-                    self.store[a_ix] = self.store[root_ix];
-                    self.store[root_ix] = tmp;
-                    try self.sink_down(a_ix);
-                }
-            } else if (S.compare(self.store[b_ix], self.store[root_ix])) {
-                const tmp = self.store[b_ix];
-                self.store[b_ix] = self.store[root_ix];
+            }
+
+            const max_child_index = self.get_max_child_ix(root_ix);
+
+            if (S.compare(self.store[max_child_index], self.store[root_ix])) {
+                const tmp = self.store[max_child_index];
+                self.store[max_child_index] = self.store[root_ix];
                 self.store[root_ix] = tmp;
-                try self.sink_down(b_ix);
+                try self.sink_down(max_child_index);
             }
         }
     };
