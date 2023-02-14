@@ -4,21 +4,15 @@ const testing = std.testing;
 
 /// Number of children per node. To be replaced with an
 /// integral part of a d-ary heap type later.
-const branch_factor = 2;
+const branch_factor: usize = 2;
 
-/// An implementation of a binary heap storing type T and
-/// capable of holding C elements. Must be provided with
-/// an evaluation function that takes type T and returns
-/// an i32 which will be used to determine the ordering
-/// within the heap. Inverting the sign of the evaluations
-/// will implement a max heap.
-fn base_comp(A: anytype, B: @TypeOf(A)) bool {
-    return A < B;
-}
-
-//pub fn minHeap(comptime T: type, comptime F: fn (T, T) bool) type {
+/// An implementation of a binary heap storing type S.dtype,
+/// and using S.compare to check which of two elements should
+/// be higher in the heap, returning true if the first
+/// argument should be higher, and false if the second should
+/// be higher.
 pub fn minHeap(comptime S: struct {
-    dtype: type = u32,
+    dtype: type = i32,
     compare: fn (anytype, anytype) bool = base_comp,
 }) type {
     return struct {
@@ -52,11 +46,12 @@ pub fn minHeap(comptime S: struct {
         /// Copies the contents of an existing slice into the array slice
         /// backing the heap. Source slice must not be longer than the
         /// heap's store slice.
-        pub fn load_data(self: *minHeap(S), src: *[]S.dtype) !void {
+        pub fn load_data(self: *minHeap(S), src: []const S.dtype) !void {
             if (src.len > self.store.len) {
                 return error.InsufficientCapacity;
             }
             for (src) |value, ix| self.store[ix] = value;
+            self.count = src.len;
             try self.heapify();
         }
 
@@ -64,7 +59,7 @@ pub fn minHeap(comptime S: struct {
         /// Does nothing if created with init (lacking an allocator).
         pub fn destroy(self: *minHeap(S)) void {
             if (self.allocator != null) {
-                self.allocator.free(self.store);
+                self.allocator.?.free(self.store);
             }
         }
 
@@ -172,13 +167,13 @@ pub fn minHeap(comptime S: struct {
             return;
         }
 
-        /// Check if the element at index ix is larger than its children,
+        /// check if the element at index ix is larger than its children,
         /// swapping them if so.
         fn sink_down(self: *minHeap(S), root_ix: usize) !void {
             if (root_ix >= self.count) {
                 return error.IndexOutOfRange;
             }
-            // Replacement node comparison
+
             if (self.is_childless(root_ix)) {
                 return;
             }
@@ -195,14 +190,33 @@ pub fn minHeap(comptime S: struct {
     };
 }
 
-fn u32_comp(a: u32, b: u32) bool {
-    return a < b;
+/// The default comparison function to use. Must be replaced for
+/// any type that is not an integer or float, or to implement a
+/// max heap.
+fn base_comp(A: anytype, B: @TypeOf(A)) bool {
+    return A < B;
 }
 
-test "Sorting an existing array slice" {
+test "Sorting in an existing array slice" {
     const dtype: type = f32;
     var data = [_]dtype{ 12, 6, 18, 19, 13 };
-    var heap = try minHeap(.{ .dtype = dtype }).init(data[0..data.len]);
+    var heap = try minHeap(.{ .dtype = dtype }).init(&data);
+    try testing.expectEqual(@as(usize, 5), heap.count);
+    try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 19), try heap.pop_root());
+    try testing.expectEqual(@as(usize, 0), heap.count);
+}
+
+test "Sorting in a heap-allocated array slice" {
+    const allocator = std.testing.allocator;
+    const dtype: type = i32;
+    const data = [_]dtype{ 12, 6, 18, 19, 13 };
+    var heap = try minHeap(.{}).create(16, allocator);
+    defer heap.destroy();
+    try heap.load_data(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
     try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
     try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
