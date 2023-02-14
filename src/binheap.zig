@@ -2,10 +2,6 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
-/// Number of children per node. To be replaced with an
-/// integral part of a d-ary heap type later.
-const branch_factor: usize = 2;
-
 /// An implementation of a binary heap storing type S.dtype,
 /// and using S.compare to check which of two elements should
 /// be higher in the heap, returning true if the first
@@ -13,8 +9,11 @@ const branch_factor: usize = 2;
 /// be higher.
 pub fn minHeap(comptime S: struct {
     dtype: type = i32,
+    branch_factor: usize = 2,
     compare: fn (anytype, anytype) bool = base_comp,
 }) type {
+    // Ensure that the branching factor is at least 2
+    const branch_factor: usize = if (S.branch_factor < 2) 2 else S.branch_factor;
     return struct {
         count: usize,
         store: []S.dtype,
@@ -215,6 +214,35 @@ test "Sorting in a heap-allocated array slice" {
     const dtype: type = i32;
     const data = [_]dtype{ 12, 6, 18, 19, 13 };
     var heap = try minHeap(.{}).create(16, allocator);
+    defer heap.destroy();
+    try heap.load_data(&data);
+    try testing.expectEqual(@as(usize, 5), heap.count);
+    try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 19), try heap.pop_root());
+    try testing.expectEqual(@as(usize, 0), heap.count);
+}
+
+test "3-way heap in an existing array slice" {
+    const dtype: type = f32;
+    var data = [_]dtype{ 12, 6, 18, 19, 13 };
+    var heap = try minHeap(.{ .branch_factor = 3, .dtype = dtype }).init(&data);
+    try testing.expectEqual(@as(usize, 5), heap.count);
+    try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 19), try heap.pop_root());
+    try testing.expectEqual(@as(usize, 0), heap.count);
+}
+
+test "3-way heap in a heap-allocated array slice" {
+    const allocator = std.testing.allocator;
+    const dtype: type = i32;
+    const data = [_]dtype{ 12, 6, 18, 19, 13 };
+    var heap = try minHeap(.{ .branch_factor = 3 }).create(16, allocator);
     defer heap.destroy();
     try heap.load_data(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
