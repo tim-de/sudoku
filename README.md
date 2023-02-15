@@ -34,18 +34,22 @@ advantages and disadvantages:
 - Do not expose the indices, but expose `heapify()`, requiring the
 user to call it every time one or more elements is changed to
 ensure that the heap property is conserved.
+
 **Pros:**
 	- Indices are encapsulated within the heap data structure,
 	and the user does not need to separately keep track of the
 	position of their data within the structure.
+	
 **Cons:**
 	- The entire heap must be updated every time any value changes.
 
 - Implement a heap element container type that holds the value and
 its current index, allowing the user to find it as needed
+
 **Pros:**
 	- Manages keeping track of the indices so they are available
 	to the user.
+	
 **Cons:**
 	- Significantly limits the way the type can be used, as the
 	user must convert their data into the correct format prior to
