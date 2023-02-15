@@ -19,7 +19,7 @@ pub fn dwayHeap(comptime S: struct {
         store: []S.dtype,
         allocator: ?Allocator,
 
-        /// Initialise a binary heap backed by an existing array slice.
+        /// Initialise a dway heap backed by an existing array slice.
         /// Will alter the contents of the slice.
         pub fn init(store: []S.dtype) !dwayHeap(S) {
             var heap = dwayHeap(S){
@@ -31,7 +31,7 @@ pub fn dwayHeap(comptime S: struct {
             return heap;
         }
 
-        /// Initialise a binary heap backed by a heap-allocated array.
+        /// Initialise an empty dway heap backed by a heap-allocated array.
         /// Must be freed with dwayHeap.destroy() when no longer needed.
         pub fn create(capacity: usize, allocator: Allocator) !dwayHeap(S) {
             var store = try allocator.alloc(S.dtype, capacity);
@@ -64,13 +64,12 @@ pub fn dwayHeap(comptime S: struct {
 
         /// Inserts an element into the heap
         pub fn add_elem(self: *dwayHeap(S), new_elem: S.dtype) !void {
-            self.count += 1;
-            if (self.count >= self.store.len) {
-                self.count -= 1;
+            if (self.store.len <= self.count + 1) {
                 return error.InsufficientCapacity;
             }
-            self.store[self.count - 1] = new_elem;
-            try self.float_up(self.count - 1);
+            self.store[self.count] = new_elem;
+            try self.float_up(self.count);
+            self.count += 1;
         }
 
         pub fn pop_root(self: *dwayHeap(S)) !S.dtype {
