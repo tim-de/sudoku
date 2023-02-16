@@ -75,5 +75,5 @@ increase-key &c. in this case)
 at compile time, implementing a more general d-ary/dway heap.
 	- [x] Replace the relative index function so that more than
 	two children can be indexed if the heap supports it.
-- [ ] Implement reallocation to automatically adjust store size
+- [x] Implement reallocation to automatically adjust store size
 if capacity is reached and store is heap-allocated.
