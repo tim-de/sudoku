@@ -47,7 +47,10 @@ pub fn dwayHeap(comptime S: struct {
         /// heap's store slice.
         pub fn load_data(self: *dwayHeap(S), src: []const S.dtype) !void {
             if (src.len > self.store.len) {
-                return error.InsufficientCapacity;
+                if (self.allocator == null) {
+                    return error.InsufficientCapacity;
+                }
+                self.store = try self.allocator.?.realloc(self.store, src.len);
             }
             for (src) |value, ix| self.store[ix] = value;
             self.count = src.len;
@@ -65,11 +68,14 @@ pub fn dwayHeap(comptime S: struct {
         /// Inserts an element into the heap
         pub fn add_elem(self: *dwayHeap(S), new_elem: S.dtype) !void {
             if (self.store.len <= self.count + 1) {
-                return error.InsufficientCapacity;
+                if (self.allocator == null) {
+                    return error.InsufficientCapacity;
+                }
+                self.store = try self.allocator.?.realloc(self.store, self.store.len + 1 + (self.store.len >> 1));
             }
-            self.store[self.count] = new_elem;
-            try self.float_up(self.count);
             self.count += 1;
+            self.store[self.count - 1] = new_elem;
+            try self.float_up(self.count - 1);
         }
 
         pub fn pop_root(self: *dwayHeap(S)) !S.dtype {
@@ -95,7 +101,7 @@ pub fn dwayHeap(comptime S: struct {
 
         fn get_parent(self: *dwayHeap(S), ix: usize) !usize {
             _ = self;
-            return try (ix - 1) / branch_factor;
+            return (ix - 1) / branch_factor;
         }
 
         fn get_child(self: *dwayHeap(S), ix: usize, n_child: usize) !usize {
@@ -115,7 +121,7 @@ pub fn dwayHeap(comptime S: struct {
             else
                 self.count - 1;
 
-            const children = self.store[first_child_ix..last_child_ix];
+            const children = self.store[first_child_ix .. last_child_ix + 1];
             var max_ix: usize = 0;
             for (children) |child, ix| {
                 if (S.compare(child, children[max_ix])) {
@@ -250,5 +256,46 @@ test "3-way heap in a heap-allocated array slice" {
     try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
     try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
     try testing.expectEqual(@as(dtype, 19), try heap.pop_root());
+    try testing.expectEqual(@as(usize, 0), heap.count);
+}
+
+test "load_data() allocating more memory after creation of heap." {
+    const allocator = std.testing.allocator;
+    const dtype: type = i32;
+    const data = [_]dtype{ 12, 6, 18, 19, 13 };
+    var heap = try dwayHeap(.{ .branch_factor = 3 }).create(3, allocator);
+    defer heap.destroy();
+    try heap.load_data(&data);
+    try testing.expectEqual(@as(usize, 5), heap.count);
+    try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 19), try heap.pop_root());
+    try testing.expectEqual(@as(usize, 0), heap.count);
+}
+
+test "add_elem() memory allocation test" {
+    const dtype: type = i32;
+    const allocator = std.testing.allocator;
+    const data = [_]dtype{ 12, 6, 18, 20, 13 };
+    var heap = try dwayHeap(.{ .branch_factor = 3 }).create(5, allocator);
+    defer heap.destroy();
+
+    try heap.load_data(&data);
+
+    try testing.expectEqual(@as(usize, 5), heap.count);
+
+    try heap.add_elem(45);
+
+    try testing.expectEqual(@as(usize, 6), heap.count);
+
+    try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 20), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 45), try heap.pop_root());
+
     try testing.expectEqual(@as(usize, 0), heap.count);
 }
