@@ -78,7 +78,10 @@ pub fn dwayHeap(comptime S: struct {
             try self.float_up(self.count - 1);
         }
 
-        pub fn pop_root(self: *dwayHeap(S)) !S.dtype {
+        /// Remove the top value from the heap and
+        /// return it, ensuring the remaining elements
+        /// of the heap are correctly ordered.
+        pub fn pop(self: *dwayHeap(S)) !S.dtype {
             if (self.count == 0) {
                 return error.PopFromEmpty;
             }
@@ -88,6 +91,45 @@ pub fn dwayHeap(comptime S: struct {
                 self.store[0] = self.store[self.count];
                 try self.sink_down(0);
             }
+            return ret;
+        }
+
+        /// Return the top value from the heap without
+        /// removing it.
+        pub fn peek(self: *dwayHeap(S)) !S.dtype {
+            if (self.count == 0) {
+                return error.PopFromEmpty;
+            }
+            return self.store[0];
+        }
+
+        /// Add an element to the heap and then pop the
+        /// top value from the heap. Performs this as a
+        /// single step and is more efficient than
+        /// separate calls to .add_elem() and .pop()
+        pub fn push_pop(self: *dwayHeap(S), item: S.dtype) !S.dtype {
+            if (self.count == 0) {
+                return item;
+            } else if (S.compare(item, self.store[0])) {
+                return item;
+            } else {
+                const ret = self.store[0];
+                self.store[0] = item;
+                try self.sink_down(0);
+                return ret;
+            }
+        }
+
+        /// Pop the top element from the heap and then push a
+        /// new item on to the heap, more efficiently than using
+        /// two separate functions.
+        pub fn replace(self: *dwayHeap(S), item: S.dtype) !S.dtype {
+            if (self.count == 0) {
+                return error.PopFromEmpty;
+            }
+            const ret = self.store[0];
+            self.store[0] = item;
+            try self.sink_down(0);
             return ret;
         }
 
@@ -109,7 +151,7 @@ pub fn dwayHeap(comptime S: struct {
             if (n_child >= branch_factor) {
                 return error.InvalidChildNumber;
             }
-            return (ix * branch_factor) + 1 + n_child;
+            return (ix * branch_factor) + n_child + 1;
         }
 
         /// Returns the index in the heap of the child of root_ix with the
@@ -206,11 +248,11 @@ test "Sorting in an existing array slice" {
     var data = [_]dtype{ 12, 6, 18, 19, 13 };
     var heap = try dwayHeap(.{ .dtype = dtype }).init(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
-    try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 19), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 6), try heap.pop());
+    try testing.expectEqual(@as(dtype, 12), try heap.pop());
+    try testing.expectEqual(@as(dtype, 13), try heap.pop());
+    try testing.expectEqual(@as(dtype, 18), try heap.pop());
+    try testing.expectEqual(@as(dtype, 19), try heap.pop());
     try testing.expectEqual(@as(usize, 0), heap.count);
 }
 
@@ -222,11 +264,11 @@ test "Sorting in a heap-allocated array slice" {
     defer heap.destroy();
     try heap.load_data(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
-    try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 19), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 6), try heap.pop());
+    try testing.expectEqual(@as(dtype, 12), try heap.pop());
+    try testing.expectEqual(@as(dtype, 13), try heap.pop());
+    try testing.expectEqual(@as(dtype, 18), try heap.pop());
+    try testing.expectEqual(@as(dtype, 19), try heap.pop());
     try testing.expectEqual(@as(usize, 0), heap.count);
 }
 
@@ -235,11 +277,11 @@ test "3-way heap in an existing array slice" {
     var data = [_]dtype{ 12, 6, 18, 19, 13 };
     var heap = try dwayHeap(.{ .branch_factor = 3, .dtype = dtype }).init(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
-    try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 19), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 6), try heap.pop());
+    try testing.expectEqual(@as(dtype, 12), try heap.pop());
+    try testing.expectEqual(@as(dtype, 13), try heap.pop());
+    try testing.expectEqual(@as(dtype, 18), try heap.pop());
+    try testing.expectEqual(@as(dtype, 19), try heap.pop());
     try testing.expectEqual(@as(usize, 0), heap.count);
 }
 
@@ -251,11 +293,11 @@ test "3-way heap in a heap-allocated array slice" {
     defer heap.destroy();
     try heap.load_data(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
-    try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 19), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 6), try heap.pop());
+    try testing.expectEqual(@as(dtype, 12), try heap.pop());
+    try testing.expectEqual(@as(dtype, 13), try heap.pop());
+    try testing.expectEqual(@as(dtype, 18), try heap.pop());
+    try testing.expectEqual(@as(dtype, 19), try heap.pop());
     try testing.expectEqual(@as(usize, 0), heap.count);
 }
 
@@ -267,11 +309,11 @@ test "load_data() allocating more memory after creation of heap." {
     defer heap.destroy();
     try heap.load_data(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
-    try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 19), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 6), try heap.pop());
+    try testing.expectEqual(@as(dtype, 12), try heap.pop());
+    try testing.expectEqual(@as(dtype, 13), try heap.pop());
+    try testing.expectEqual(@as(dtype, 18), try heap.pop());
+    try testing.expectEqual(@as(dtype, 19), try heap.pop());
     try testing.expectEqual(@as(usize, 0), heap.count);
 }
 
@@ -290,12 +332,12 @@ test "add_elem() memory allocation test" {
 
     try testing.expectEqual(@as(usize, 6), heap.count);
 
-    try testing.expectEqual(@as(dtype, 6), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 12), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 13), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 18), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 20), try heap.pop_root());
-    try testing.expectEqual(@as(dtype, 45), try heap.pop_root());
+    try testing.expectEqual(@as(dtype, 6), try heap.pop());
+    try testing.expectEqual(@as(dtype, 12), try heap.pop());
+    try testing.expectEqual(@as(dtype, 13), try heap.pop());
+    try testing.expectEqual(@as(dtype, 18), try heap.pop());
+    try testing.expectEqual(@as(dtype, 20), try heap.pop());
+    try testing.expectEqual(@as(dtype, 45), try heap.pop());
 
     try testing.expectEqual(@as(usize, 0), heap.count);
 }
