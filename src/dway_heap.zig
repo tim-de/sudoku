@@ -2,7 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
-/// An implementation of a d-ary heap storing type S.dtype,
+/// An implementation of a d-way heap storing type S.dtype,
 /// and using S.compare to check which of two elements should
 /// be higher in the heap, returning true if the first
 /// argument should be higher, and false if the second should
@@ -19,7 +19,7 @@ pub fn dwayHeap(comptime S: struct {
         store: []S.dtype,
         allocator: ?Allocator,
 
-        /// Initialise a dway heap backed by an existing array slice.
+        /// Initialise a d-way heap backed by an existing array slice.
         /// Will alter the contents of the slice.
         pub fn init(store: []S.dtype) !dwayHeap(S) {
             var heap = dwayHeap(S){
@@ -31,7 +31,7 @@ pub fn dwayHeap(comptime S: struct {
             return heap;
         }
 
-        /// Initialise an empty dway heap backed by a heap-allocated array.
+        /// Initialise an empty d-way heap backed by a heap-allocated array.
         /// Must be freed with dwayHeap.destroy() when no longer needed.
         pub fn create(capacity: usize, allocator: Allocator) !dwayHeap(S) {
             var store = try allocator.alloc(S.dtype, capacity);
