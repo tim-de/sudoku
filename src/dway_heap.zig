@@ -133,7 +133,7 @@ pub fn dwayHeap(comptime S: struct {
             return ret;
         }
 
-        pub fn increase_key(self: *dwayHeap(S)) !void {
+        fn increase_key(self: *dwayHeap(S)) !void {
             for (self.store) |_, ix| {
                 if (try self.float_up(ix) == true) {
                     return;
@@ -181,7 +181,7 @@ pub fn dwayHeap(comptime S: struct {
         }
 
         /// Sorts the heap, ensuring that the heap property is satisfied.
-        fn heapify(self: *dwayHeap(S)) !void {
+        pub fn heapify(self: *dwayHeap(S)) !void {
             var ix = self.count / branch_factor;
             while (ix > 0) {
                 ix -= 1;
