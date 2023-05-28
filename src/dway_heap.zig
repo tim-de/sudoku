@@ -2,27 +2,26 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
-/// An implementation of a d-way heap storing type S.dtype,
+/// An implementation of a d-way heap storing type T,
 /// and using S.compare to check which of two elements should
 /// be higher in the heap, returning true if the first
 /// argument should be higher, and false if the second should
 /// be higher.
-pub fn DwayHeap(comptime S: struct {
-    dtype: type = i32,
+pub fn DwayHeap(comptime T: type, comptime S: struct {
     branch_factor: usize = 2,
-    compare: fn (anytype, anytype) bool = base_comp,
+    compare: fn (T, T) bool = base_comp,
 }) type {
     // Ensure that the branching factor is at least 2
     const branch_factor: usize = if (S.branch_factor < 2) 2 else S.branch_factor;
     return struct {
         count: usize,
-        store: []S.dtype,
+        store: []T,
         allocator: ?Allocator,
 
         /// Initialise a d-way heap backed by an existing array slice.
         /// Will alter the contents of the slice.
-        pub fn init(store: []S.dtype) !DwayHeap(S) {
-            var heap = DwayHeap(S){
+        pub fn init(store: []T) !DwayHeap(T, S) {
+            var heap = DwayHeap(T, S){
                 .count = store.len,
                 .store = store,
                 .allocator = null,
@@ -33,9 +32,9 @@ pub fn DwayHeap(comptime S: struct {
 
         /// Initialise an empty d-way heap backed by a heap-allocated array.
         /// Must be freed with DwayHeap.destroy() when no longer needed.
-        pub fn create(capacity: usize, allocator: Allocator) !DwayHeap(S) {
-            var store = try allocator.alloc(S.dtype, capacity);
-            return DwayHeap(S){
+        pub fn create(capacity: usize, allocator: Allocator) !DwayHeap(T, S) {
+            var store = try allocator.alloc(T, capacity);
+            return DwayHeap(T, S){
                 .count = 0,
                 .store = store,
                 .allocator = allocator,
@@ -45,7 +44,7 @@ pub fn DwayHeap(comptime S: struct {
         /// Copies the contents of an existing slice into the array slice
         /// backing the heap. Source slice must not be longer than the
         /// heap's store slice.
-        pub fn load_data(self: *DwayHeap(S), src: []const S.dtype) !void {
+        pub fn load_data(self: *DwayHeap(T, S), src: []const T) !void {
             if (src.len > self.store.len) {
                 if (self.allocator == null) {
                     return error.InsufficientCapacity;
@@ -59,14 +58,14 @@ pub fn DwayHeap(comptime S: struct {
 
         /// Frees the underlying array slice backing a heap-allocated DwayHeap.
         /// Does nothing if created with init (lacking an allocator).
-        pub fn destroy(self: *DwayHeap(S)) void {
+        pub fn destroy(self: *DwayHeap(T, S)) void {
             if (self.allocator != null) {
                 self.allocator.?.free(self.store);
             }
         }
 
         /// Inserts an element into the heap
-        pub fn add_elem(self: *DwayHeap(S), new_elem: S.dtype) !void {
+        pub fn add_elem(self: *DwayHeap(T, S), new_elem: T) !void {
             if (self.store.len <= self.count + 1) {
                 if (self.allocator == null) {
                     return error.InsufficientCapacity;
@@ -81,7 +80,7 @@ pub fn DwayHeap(comptime S: struct {
         /// Remove the top value from the heap and
         /// return it, ensuring the remaining elements
         /// of the heap are correctly ordered.
-        pub fn pop(self: *DwayHeap(S)) !S.dtype {
+        pub fn pop(self: *DwayHeap(T, S)) !T {
             if (self.count == 0) {
                 return error.PopFromEmpty;
             }
@@ -96,7 +95,7 @@ pub fn DwayHeap(comptime S: struct {
 
         /// Return the top value from the heap without
         /// removing it.
-        pub fn peek(self: *DwayHeap(S)) !S.dtype {
+        pub fn peek(self: *DwayHeap(T, S)) !T {
             if (self.count == 0) {
                 return error.PopFromEmpty;
             }
@@ -107,7 +106,7 @@ pub fn DwayHeap(comptime S: struct {
         /// top value from the heap. Performs this as a
         /// single step and is more efficient than
         /// separate calls to .add_elem() and .pop()
-        pub fn push_pop(self: *DwayHeap(S), item: S.dtype) !S.dtype {
+        pub fn push_pop(self: *DwayHeap(T, S), item: T) !T {
             if (self.count == 0) {
                 return item;
             } else if (S.compare(item, self.store[0])) {
@@ -123,7 +122,7 @@ pub fn DwayHeap(comptime S: struct {
         /// Pop the top element from the heap and then push a
         /// new item on to the heap, more efficiently than using
         /// two separate functions.
-        pub fn replace(self: *DwayHeap(S), item: S.dtype) !S.dtype {
+        pub fn replace(self: *DwayHeap(T, S), item: T) !T {
             if (self.count == 0) {
                 return error.PopFromEmpty;
             }
@@ -133,7 +132,7 @@ pub fn DwayHeap(comptime S: struct {
             return ret;
         }
 
-        fn increase_key(self: *DwayHeap(S)) !void {
+        fn increase_key(self: *DwayHeap(T, S)) !void {
             for (self.store) |_, ix| {
                 if (try self.float_up(ix) == true) {
                     return;
@@ -141,12 +140,12 @@ pub fn DwayHeap(comptime S: struct {
             }
         }
 
-        fn get_parent(self: *DwayHeap(S), ix: usize) !usize {
+        fn get_parent(self: *DwayHeap(T, S), ix: usize) !usize {
             _ = self;
             return (ix - 1) / branch_factor;
         }
 
-        fn get_child(self: *DwayHeap(S), ix: usize, n_child: usize) !usize {
+        fn get_child(self: *DwayHeap(T, S), ix: usize, n_child: usize) !usize {
             _ = self;
             if (n_child >= branch_factor) {
                 return error.InvalidChildNumber;
@@ -156,7 +155,7 @@ pub fn DwayHeap(comptime S: struct {
 
         /// Returns the index in the heap of the child of root_ix with the
         /// highest priority
-        fn get_max_child_ix(self: *DwayHeap(S), root_ix: usize) usize {
+        fn get_max_child_ix(self: *DwayHeap(T, S), root_ix: usize) usize {
             const first_child_ix = (root_ix * branch_factor) + 1;
             const last_child_ix = if ((root_ix + 1) * branch_factor < self.count)
                 (root_ix + 1) * branch_factor
@@ -176,12 +175,12 @@ pub fn DwayHeap(comptime S: struct {
         /// Returns true if the node at ix has no children
         /// (index of children is outside the range used
         /// by the heap)
-        fn is_childless(self: *DwayHeap(S), ix: usize) bool {
+        fn is_childless(self: *DwayHeap(T, S), ix: usize) bool {
             return (ix * branch_factor) + 1 >= self.count;
         }
 
         /// Sorts the heap, ensuring that the heap property is satisfied.
-        pub fn heapify(self: *DwayHeap(S)) !void {
+        pub fn heapify(self: *DwayHeap(T, S)) !void {
             var ix = self.count / branch_factor;
             while (ix > 0) {
                 ix -= 1;
@@ -191,7 +190,7 @@ pub fn DwayHeap(comptime S: struct {
 
         /// Checks if the element at index ix is smaller than its parent,
         /// swapping them if so
-        fn float_up(self: *DwayHeap(S), ix: usize) !void {
+        fn float_up(self: *DwayHeap(T, S), ix: usize) !void {
             if (ix >= self.count) {
                 return error.IndexOutOfRange;
             }
@@ -215,7 +214,7 @@ pub fn DwayHeap(comptime S: struct {
 
         /// check if the element at index ix is larger than its children,
         /// swapping them if so.
-        fn sink_down(self: *DwayHeap(S), root_ix: usize) !void {
+        fn sink_down(self: *DwayHeap(T, S), root_ix: usize) !void {
             if (root_ix >= self.count) {
                 return error.IndexOutOfRange;
             }
@@ -246,7 +245,7 @@ fn base_comp(A: anytype, B: @TypeOf(A)) bool {
 test "Sorting in an existing array slice" {
     const dtype: type = f32;
     var data = [_]dtype{ 12, 6, 18, 19, 13 };
-    var heap = try DwayHeap(.{ .dtype = dtype }).init(&data);
+    var heap = try DwayHeap(dtype, .{ .compare = base_comp }).init(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
     try testing.expectEqual(@as(dtype, 6), try heap.pop());
     try testing.expectEqual(@as(dtype, 12), try heap.pop());
@@ -260,7 +259,7 @@ test "Sorting in a heap-allocated array slice" {
     const allocator = std.testing.allocator;
     const dtype: type = i32;
     const data = [_]dtype{ 12, 6, 18, 19, 13 };
-    var heap = try DwayHeap(.{}).create(16, allocator);
+    var heap = try DwayHeap(dtype, .{ .compare = base_comp }).create(16, allocator);
     defer heap.destroy();
     try heap.load_data(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
@@ -275,7 +274,10 @@ test "Sorting in a heap-allocated array slice" {
 test "3-way heap in an existing array slice" {
     const dtype: type = f32;
     var data = [_]dtype{ 12, 6, 18, 19, 13 };
-    var heap = try DwayHeap(.{ .branch_factor = 3, .dtype = dtype }).init(&data);
+    var heap = try DwayHeap(dtype, .{
+        .branch_factor = 3,
+        .compare = base_comp,
+    }).init(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
     try testing.expectEqual(@as(dtype, 6), try heap.pop());
     try testing.expectEqual(@as(dtype, 12), try heap.pop());
@@ -289,7 +291,7 @@ test "3-way heap in a heap-allocated array slice" {
     const allocator = std.testing.allocator;
     const dtype: type = i32;
     const data = [_]dtype{ 12, 6, 18, 19, 13 };
-    var heap = try DwayHeap(.{ .branch_factor = 3 }).create(16, allocator);
+    var heap = try DwayHeap(dtype, .{ .branch_factor = 3, .compare = base_comp }).create(16, allocator);
     defer heap.destroy();
     try heap.load_data(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
@@ -305,7 +307,7 @@ test "load_data() allocating more memory after creation of heap." {
     const allocator = std.testing.allocator;
     const dtype: type = i32;
     const data = [_]dtype{ 12, 6, 18, 19, 13 };
-    var heap = try DwayHeap(.{ .branch_factor = 3 }).create(3, allocator);
+    var heap = try DwayHeap(dtype, .{ .branch_factor = 3, .compare = base_comp }).create(3, allocator);
     defer heap.destroy();
     try heap.load_data(&data);
     try testing.expectEqual(@as(usize, 5), heap.count);
@@ -321,7 +323,7 @@ test "add_elem() memory allocation test" {
     const dtype: type = i32;
     const allocator = std.testing.allocator;
     const data = [_]dtype{ 12, 6, 18, 20, 13 };
-    var heap = try DwayHeap(.{ .branch_factor = 3 }).create(5, allocator);
+    var heap = try DwayHeap(dtype, .{ .branch_factor = 3, .compare = base_comp }).create(5, allocator);
     defer heap.destroy();
 
     try heap.load_data(&data);
