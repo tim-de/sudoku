@@ -1,6 +1,6 @@
 const std = @import("std");
 const SudokuGrid = @import("sudoku.zig").SudokuGrid;
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+var gpa = std.heap.GeneralPurposeAllocator(.{ .safety = true }){};
 const allocator = gpa.allocator();
 
 pub fn main() !void {
