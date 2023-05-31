@@ -2,6 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 const testing = std.testing;
 
+const DiscreteStack = @import("discrete_stack.zig").DiscreteStack;
 const DwayHeap = @import("dway_heap.zig").DwayHeap;
 const BitSet = std.bit_set.IntegerBitSet(10);
 const CellHeap = DwayHeap(*SudokuCell, .{
@@ -16,7 +17,7 @@ const Coordinate = struct {
 
 const SudokuCell = struct {
     value: usize = 0,
-    options: BitSet = BitSet.initFull(),
+    options: BitSet,
     neighbours: [20]*SudokuCell = undefined,
 
     fn init(value: usize) SudokuCell {
@@ -24,8 +25,10 @@ const SudokuCell = struct {
     }
 
     fn setOptions(self: *SudokuCell) void {
+        self.options.setUnion(BitSet.initFull());
         self.options.unset(0);
         if (self.value != 0) {
+            self.options.setIntersection(BitSet.initEmpty());
             return;
         }
         for (self.neighbours) |neighbour| {
@@ -34,6 +37,12 @@ const SudokuCell = struct {
             }
         }
     }
+};
+
+const SolveState = struct {
+    cell: *SudokuCell,
+    iterator: BitSet.Iterator(.{}) = undefined,
+    changed: DiscreteStack(*SudokuCell, 20),
 };
 
 fn getNeighbourPosition(pos: Coordinate, n: usize) Coordinate {
@@ -45,6 +54,7 @@ fn getNeighbourPosition(pos: Coordinate, n: usize) Coordinate {
             }
             break :row Coordinate{ .i = offset, .j = pos.j };
         },
+
         8...15 => column: {
             var offset: usize = n - 8;
             if (offset >= pos.j) {
@@ -52,6 +62,7 @@ fn getNeighbourPosition(pos: Coordinate, n: usize) Coordinate {
             }
             break :column Coordinate{ .i = pos.i, .j = offset };
         },
+
         else => box: {
             const box_i = pos.i / 3;
             const box_j = pos.j / 3;
@@ -71,7 +82,7 @@ fn getNeighbourPosition(pos: Coordinate, n: usize) Coordinate {
             } else if (j_in_box == 1) {
                 j_offset *= 2;
             }
-            break :box Coordinate{ .i = box_i + i_offset, .j = box_j + j_offset };
+            break :box Coordinate{ .i = (3 * box_i) + i_offset, .j = (3 * box_j) + j_offset };
         },
     };
 }
@@ -96,10 +107,10 @@ pub const SudokuGrid = struct {
         }
         ret.assignNeighbours();
 
-        for (ret.grid) |row, j| {
-            for (row) |_, i| {
-                ret.grid[j][i].setOptions();
-                if (ret.grid[j][i].options.count() > 0) {
+        for (ret.grid) |*row, j| {
+            for (row) |*cell, i| {
+                cell.setOptions();
+                if (cell.options.count() > 0) {
                     try ret.heap.add_elem(&ret.grid[j][i]);
                 }
             }
@@ -117,55 +128,16 @@ pub const SudokuGrid = struct {
         for (self.grid) |row, j| {
             for (row) |cell, i| {
                 try stdout.print(" {d}", .{cell.value});
-                if (i % 3 == 0) {
+                if ((i + 1) % 3 == 0) {
                     try stdout.print(" ", .{});
                 }
             }
-            if (j % 3 == 0) {
+            if ((j + 1) % 3 == 0) {
                 try stdout.print("\n", .{});
             }
             try stdout.print("\n", .{});
         }
-    }
-
-    fn getNeighbour(self: *SudokuGrid, i: usize, j: usize, n: usize) *SudokuCell {
-        return switch (n) {
-            0...7 => row: {
-                var offset: usize = n;
-                if (offset >= i) {
-                    offset += 1;
-                }
-                break :row &self.grid[j][offset];
-            },
-            8...15 => column: {
-                var offset: usize = n - 8;
-                if (offset >= j) {
-                    offset += 1;
-                }
-                break :column &self.grid[offset][i];
-            },
-            else => box: {
-                const box_i = i / 3;
-                const box_j = j / 3;
-                const i_in_box = i % 3;
-                const j_in_box = j % 3;
-                var i_offset = (n - 16) / 2;
-                var j_offset = (n - 16) % 2;
-                // this should probably become
-                // an inlined function
-                if (i_in_box == 0) {
-                    i_offset += 1;
-                } else if (i_in_box == 1) {
-                    i_offset *= 2;
-                }
-                if (j_in_box == 0) {
-                    j_offset += 1;
-                } else if (j_in_box == 1) {
-                    j_offset *= 2;
-                }
-                break :box &self.grid[box_j + j_offset][box_i + i_offset];
-            },
-        };
+        try stdout.print(" --------------------\n", .{});
     }
 
     fn assignNeighbours(self: *SudokuGrid) void {
@@ -173,7 +145,8 @@ pub const SudokuGrid = struct {
             for (row) |_, i| {
                 var n: usize = 0;
                 while (n < 20) {
-                    self.grid[j][i].neighbours[n] = self.getNeighbour(i, j, n);
+                    const neighbour_pos = getNeighbourPosition(Coordinate{ .i = i, .j = j }, n);
+                    self.grid[j][i].neighbours[n] = &self.grid[neighbour_pos.j][neighbour_pos.i];
                     n += 1;
                 }
             }
@@ -188,41 +161,76 @@ pub const SudokuGrid = struct {
         }
         var iterator = cell.options.iterator(.{});
         while (iterator.next()) |option| {
-            var changed_cells = try allocator.alloc(?*SudokuCell, 20);
-            defer allocator.free(changed_cells);
+            var changed_cells = [_]?*SudokuCell{null} ** 20;
             var changed_cell_ix: usize = 0;
             cell.value = option;
             if (self.heap.count == 0) {
                 return true;
             }
             for (cell.neighbours) |neighbour| {
-                if (neighbour.value == 0 and cell.options.isSet(neighbour.value)) {
+                if (neighbour.value == 0 and neighbour.options.isSet(option)) {
                     changed_cells[changed_cell_ix] = neighbour;
                     changed_cell_ix += 1;
                     neighbour.options.unset(option);
                 }
             }
             try self.heap.heapify();
+            //try self.draw();
             if (try self.depthFirstSearch(allocator)) {
                 return true;
             }
             cell.value = 0;
-            for (changed_cells) |optional_neighbour| {
-                if (optional_neighbour) |neighbour| {
-                    neighbour.options.set(option);
-                }
+            //cell.setOptions();
+            changed_cell_ix = 0;
+            while (changed_cells[changed_cell_ix]) |changed_cell| {
+                changed_cell.options.set(option);
+                //changed_cell.setOptions();
+                changed_cell_ix += 1;
             }
             try self.heap.heapify();
         }
         try self.heap.add_elem(cell);
         return false;
     }
+
+    pub fn depthFirstSearchNoRecurse(self: *SudokuGrid) void {
+        var state_stack = DiscreteStack(SolveState, 81){};
+        var state = SolveState{ .cell = try self.heap.pop(), .iterator = .cell.options.iterator(.{}) };
+
+        while (true) {
+            const option_try = state.iterator.next();
+            if (option_try) |option| {
+                state.cell.value = option;
+                if (self.heap.count <= 0) {
+                    return;
+                }
+                for (state.cell.neighbours) |neighbour| {
+                    if (neighbour.value == 0 and neighbour.options.isSet(option)) {
+                        try state.changed.push(neighbour);
+                        neighbour.options.unset(option);
+                    }
+                }
+                try self.heap.heapify();
+                try state_stack.push(state);
+                state = SolveState{ .cell = try self.heap.pop(), .iterator = .cell.options.iterator(.{}) };
+                state.changed.index = 0;
+            } else {
+                state.cell.value = 0;
+                self.heap.push(state.cell);
+                state = try state_stack.pop();
+            }
+        }
+    }
 };
 
 test "Get neighbour positions" {
     const testpos = Coordinate{ .i = 3, .j = 5 };
+    // Test getting a value from the same row
     try testing.expectEqual(Coordinate{ .i = 2, .j = 5 }, getNeighbourPosition(testpos, 2));
+    // Test getting a value from the same column
     try testing.expectEqual(Coordinate{ .i = 3, .j = 2 }, getNeighbourPosition(testpos, 10));
+    // Test getting a value from the same box
+    try testing.expectEqual(Coordinate{ .i = 4, .j = 3 }, getNeighbourPosition(testpos, 16));
 }
 
 test "Set values in a SudokuCell" {
@@ -238,4 +246,15 @@ test "Setup an actual sudoku puzzle" {
     try testing.expectEqual(grid.grid[0][0].value, @as(u8, 0));
     try testing.expectEqual(grid.grid[0][4].value, @as(u8, 4));
     try testing.expectEqual(grid.grid[2][1].value, @as(u8, 9));
+
+    try testing.expect(!grid.grid[0][0].options.isSet(5));
+    for (grid.grid) |row| {
+        for (row) |cell| {
+            for (cell.neighbours) |neighbour| {
+                if (neighbour == undefined) {
+                    unreachable;
+                }
+            }
+        }
+    }
 }
