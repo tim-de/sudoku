@@ -6,7 +6,7 @@ const DiscreteStack = @import("discrete_stack.zig").DiscreteStack;
 const DwayHeap = @import("dway_heap.zig").DwayHeap;
 const BitSet = std.bit_set.IntegerBitSet(10);
 const CellHeap = DwayHeap(*SudokuCell, .{
-    .branch_factor = 3,
+    .branch_factor = 4,
     .compare = cellCompare,
 });
 
@@ -15,9 +15,9 @@ const Coordinate = struct {
     j: usize,
 };
 
-const SudokuCell = struct {
+pub const SudokuCell = struct {
     value: usize = 0,
-    options: BitSet,
+    options: BitSet = undefined,
     neighbours: [20]*SudokuCell = undefined,
 
     fn init(value: usize) SudokuCell {
@@ -40,9 +40,9 @@ const SudokuCell = struct {
 };
 
 const SolveState = struct {
-    cell: *SudokuCell,
+    cell: *SudokuCell = undefined,
     iterator: BitSet.Iterator(.{}) = undefined,
-    changed: DiscreteStack(*SudokuCell, 20),
+    changed: DiscreteStack(*SudokuCell, 20) = undefined,
 };
 
 fn getNeighbourPosition(pos: Coordinate, n: usize) Coordinate {
@@ -92,8 +92,32 @@ fn cellCompare(a: anytype, b: @TypeOf(a)) bool {
 }
 
 pub const SudokuGrid = struct {
-    grid: *[9][9]SudokuCell,
-    heap: CellHeap,
+    grid: *[9][9]SudokuCell = undefined,
+    heap: CellHeap = undefined,
+
+    pub fn setup(self: *SudokuGrid, grid: *[9][9]SudokuCell, arr: []const u8, allocator: Allocator) !void {
+        self.grid = grid;
+        self.heap = try CellHeap.create(81, allocator);
+
+        for (arr) |value, ix| {
+            const j = ix / 9;
+            const i = ix % 9;
+            self.grid[j][i] = SudokuCell{
+                .value = value,
+                .options = BitSet.initFull(),
+            };
+        }
+        self.assignNeighbours();
+
+        for (self.grid) |*row, j| {
+            for (row) |*cell, i| {
+                cell.setOptions();
+                if (cell.options.count() > 0) {
+                    try self.heap.add_elem(&self.grid[j][i]);
+                }
+            }
+        }
+    }
 
     pub fn fromArray(arr: []const u8, allocator: Allocator) !SudokuGrid {
         var ret: SudokuGrid = SudokuGrid{
@@ -103,7 +127,10 @@ pub const SudokuGrid = struct {
         for (arr) |value, ix| {
             const j = ix / 9;
             const i = ix % 9;
-            ret.grid[j][i].value = value;
+            ret.grid[j][i] = SudokuCell{
+                .value = value,
+                .options = BitSet.initFull(),
+            };
         }
         ret.assignNeighbours();
 
@@ -119,25 +146,26 @@ pub const SudokuGrid = struct {
     }
 
     pub fn cleanUp(self: *SudokuGrid, allocator: Allocator) void {
-        allocator.destroy(self.grid);
+        _ = allocator;
+        //allocator.destroy(self.grid);
         self.heap.destroy();
     }
 
     pub fn draw(self: SudokuGrid) !void {
         const stdout = std.io.getStdOut().writer();
         for (self.grid) |row, j| {
+            if (j % 3 == 0) {
+                try stdout.print("\n", .{});
+            }
             for (row) |cell, i| {
-                try stdout.print(" {d}", .{cell.value});
-                if ((i + 1) % 3 == 0) {
+                if (i % 3 == 0) {
                     try stdout.print(" ", .{});
                 }
-            }
-            if ((j + 1) % 3 == 0) {
-                try stdout.print("\n", .{});
+                try stdout.print(" {d}", .{cell.value});
             }
             try stdout.print("\n", .{});
         }
-        try stdout.print(" --------------------\n", .{});
+        try stdout.print("\n", .{});
     }
 
     fn assignNeighbours(self: *SudokuGrid) void {
@@ -153,39 +181,35 @@ pub const SudokuGrid = struct {
         }
     }
 
-    pub fn depthFirstSearch(self: *SudokuGrid, allocator: Allocator) !bool {
+    pub fn depthFirstSearch(self: *SudokuGrid) !bool {
         var cell = try self.heap.pop();
         if (cell.options.count() == 0) {
             try self.heap.add_elem(cell);
             return false;
         }
         var iterator = cell.options.iterator(.{});
+        var changed = DiscreteStack(*SudokuCell, 20){};
         while (iterator.next()) |option| {
-            var changed_cells = [_]?*SudokuCell{null} ** 20;
-            var changed_cell_ix: usize = 0;
             cell.value = option;
             if (self.heap.count == 0) {
                 return true;
             }
             for (cell.neighbours) |neighbour| {
                 if (neighbour.value == 0 and neighbour.options.isSet(option)) {
-                    changed_cells[changed_cell_ix] = neighbour;
-                    changed_cell_ix += 1;
+                    try changed.push(neighbour);
                     neighbour.options.unset(option);
                 }
             }
             try self.heap.heapify();
             //try self.draw();
-            if (try self.depthFirstSearch(allocator)) {
+            if (try self.depthFirstSearch()) {
                 return true;
             }
             cell.value = 0;
             //cell.setOptions();
-            changed_cell_ix = 0;
-            while (changed_cells[changed_cell_ix]) |changed_cell| {
+            while (changed.pop()) |changed_cell| {
                 changed_cell.options.set(option);
                 //changed_cell.setOptions();
-                changed_cell_ix += 1;
             }
             try self.heap.heapify();
         }
@@ -193,13 +217,14 @@ pub const SudokuGrid = struct {
         return false;
     }
 
-    pub fn depthFirstSearchNoRecurse(self: *SudokuGrid) void {
+    pub fn depthFirstSearchNoRecurse(self: *SudokuGrid) !void {
         var state_stack = DiscreteStack(SolveState, 81){};
-        var state = SolveState{ .cell = try self.heap.pop(), .iterator = .cell.options.iterator(.{}) };
-
+        var state = SolveState{};
+        state.cell = try self.heap.pop();
+        state.iterator = state.cell.options.iterator(.{});
+        state.changed = DiscreteStack(*SudokuCell, 20){};
         while (true) {
-            const option_try = state.iterator.next();
-            if (option_try) |option| {
+            if (state.iterator.next()) |option| {
                 state.cell.value = option;
                 if (self.heap.count <= 0) {
                     return;
@@ -210,14 +235,19 @@ pub const SudokuGrid = struct {
                         neighbour.options.unset(option);
                     }
                 }
+                //try self.draw();
                 try self.heap.heapify();
                 try state_stack.push(state);
-                state = SolveState{ .cell = try self.heap.pop(), .iterator = .cell.options.iterator(.{}) };
+                state.cell = try self.heap.pop();
+                state.iterator = state.cell.options.iterator(.{});
                 state.changed.index = 0;
             } else {
                 state.cell.value = 0;
-                self.heap.push(state.cell);
-                state = try state_stack.pop();
+                try self.heap.add_elem(state.cell);
+                state = state_stack.pop().?;
+                while (state.changed.pop()) |neighbour| {
+                    neighbour.options.set(state.cell.value);
+                }
             }
         }
     }
@@ -234,7 +264,7 @@ test "Get neighbour positions" {
 }
 
 test "Set values in a SudokuCell" {
-    var test_cell = SudokuCell{ .value = 0 };
+    var test_cell = SudokuCell{ .value = 0, .options = BitSet.initFull() };
     test_cell.options.unset(6);
     try testing.expect(!test_cell.options.isSet(6));
 }
@@ -257,4 +287,33 @@ test "Setup an actual sudoku puzzle" {
             }
         }
     }
+}
+
+test "Push state to stack and retrieve" {
+    var stack = DiscreteStack(SolveState, 10){};
+    var cells = [_]SudokuCell{SudokuCell{ .value = 0, .options = BitSet.initFull() }} ** 5;
+    var state = SolveState{ .cell = &cells[0], .iterator = cells[0].options.iterator(.{}), .changed = DiscreteStack(*SudokuCell, 20){} };
+    try state.changed.push(&cells[1]);
+    try state.changed.push(&cells[2]);
+    try state.changed.push(&cells[3]);
+    try testing.expectEqual(@as(usize, 0), state.iterator.next().?);
+    try testing.expectEqual(@as(usize, 1), state.iterator.next().?);
+    try testing.expectEqual(@as(usize, 2), state.iterator.next().?);
+    try stack.push(state);
+    state.cell = &cells[1];
+    state.iterator = cells[1].options.iterator(.{});
+    state.changed.index = 0;
+    try state.changed.push(&cells[4]);
+    try testing.expectEqual(@as(usize, 0), state.iterator.next().?);
+    try stack.push(state);
+    var newstate = stack.pop().?;
+    try testing.expectEqual(&cells[1], newstate.cell);
+    try testing.expectEqual(&cells[4], newstate.changed.pop().?);
+    try testing.expectEqual(@as(usize, 1), newstate.iterator.next().?);
+    newstate = stack.pop().?;
+    try testing.expectEqual(&cells[0], newstate.cell);
+    try testing.expectEqual(&cells[3], newstate.changed.pop().?);
+    try testing.expectEqual(&cells[2], newstate.changed.pop().?);
+    try testing.expectEqual(&cells[1], newstate.changed.pop().?);
+    try testing.expectEqual(@as(usize, 3), newstate.iterator.next().?);
 }

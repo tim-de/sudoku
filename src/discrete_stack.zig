@@ -4,8 +4,8 @@ const testing = std.testing;
 
 /// A stack implementation of comptime defined capacity
 /// that can therefore be instantiated on the stack
-/// as a function-local variable
-fn DiscreteStack(comptime T: type, comptime C: usize) type {
+/// as a function-local variable.
+pub fn DiscreteStack(comptime T: type, comptime C: usize) type {
     return struct {
         store: [C]T = undefined,
         index: usize = 0,
@@ -19,21 +19,21 @@ fn DiscreteStack(comptime T: type, comptime C: usize) type {
             self.index += 1;
         }
 
-        /// Pop the top value from the stack
-        pub fn pop(self: *DiscreteStack(T, C)) !T {
+        /// Pop the top value from the stack, returning null
+        /// in the case of an empty stack
+        pub fn pop(self: *DiscreteStack(T, C)) ?T {
             if (self.index <= 0) {
-                return error.popFromEmpty;
+                return null;
             }
             self.index -= 1;
-            const ret = self.store[self.index];
-            return ret;
+            return self.store[self.index];
         }
     };
 }
 
-test "Initialise empty stack and fail to read" {
+test "Initialise empty stack and read null" {
     var stack = DiscreteStack(i32, 20){};
-    try testing.expectError(error.popFromEmpty, stack.pop());
+    try testing.expect(if (stack.pop()) |_| false else true);
 }
 
 test "Push items to stack and retrieve them" {
@@ -42,8 +42,8 @@ test "Push items to stack and retrieve them" {
     try stack.push(8);
     try stack.push(9);
     try testing.expectError(error.outOfSpace, stack.push(69));
-    try testing.expectEqual(@as(i32, 9), try stack.pop());
-    try testing.expectEqual(@as(i32, 8), try stack.pop());
-    try testing.expectEqual(@as(i32, 12), try stack.pop());
-    try testing.expectError(error.popFromEmpty, stack.pop());
+    try testing.expectEqual(@as(i32, 9), stack.pop().?);
+    try testing.expectEqual(@as(i32, 8), stack.pop().?);
+    try testing.expectEqual(@as(i32, 12), stack.pop().?);
+    try testing.expect(if (stack.pop()) |_| false else true);
 }
