@@ -1,8 +1,5 @@
 # Sudoku
 
-This is going to contain a sudoku solver. For the time being,
-however, it's just data structure implementation!
-
 ## Dway Heap
 An implementation of the dway heap data structure, which
 functions as a more generalised form of binary heap where
@@ -18,62 +15,32 @@ displacing other elements, whose positions cannot be easily
 tracked, even if the new index of the target element is
 returned from the function.
 
-I can think of several possible solutions to this, each with
-advantages and disadvantages:
+The response used here is to expose the heapify function in
+the public api, as for this application, item priority is
+updated in a batched fashion, so it makes sense to run a
+single series of passes to update the whole heap rather than
+having to find each of the items first.
 
-1. Return a list of old-new index pairs from the function
+## Sudoku Solving
 
-	**Pros:**
-	- Enables the user to keep track of all changing indices.
-	
-	**Cons:**
-	- Requires the user maintaining some additional data structure
-   to hold the indices of the items, somewhat defeating the point
-   of having a heap.
-   - Significantly complicates the operation and return of the
-   functions responsible for exchanging values in the heap
+### Depth First Search
 
-2. Do not expose the indices, but expose `heapify()`, requiring the
-user to call it every time one or more elements is changed to
-ensure that the heap property is conserved.
+The algorithm used here to solve sudoku puzzles is a form of
+depth first search backtracking algorithm. The algorithm works
+by sequentially choosing cells and assigning possible numbers.
+If at any point there is a cell with no possible numbers the
+last cell that was set is updated to the next possible value.
+This is repeated recursively until all values have been filled in.
 
-	**Pros:**
-	- Indices are encapsulated within the heap data structure,
-	and the user does not need to separately keep track of the
-	position of their data within the structure.
-		
-	**Cons:**
-	- The entire heap must be updated every time any value changes.
+The application of the dway heap data structure is as a priority
+queue used to determine the order to fill in cells. To minimise
+the number of states that must be tested the cell with the fewest
+options is selected.
 
-3. Implement a heap element container type that holds the value and
-its current index, allowing the user to find it as needed
+### Current State of Development
 
-	**Pros:**
-	- Manages keeping track of the indices so they are available
-	to the user.
-	
-	**Cons:**
-	- Significantly limits the way the type can be used, as the
-	user must convert their data into the correct format prior to
-	insertion into the data structure. Alternatively, the structure
-	must be heap-allocated and the container type added when data
-	is inserted into the structure.
-	- However it is implemented, it significantly complicates the
-	implementation of the structure.
-
-### To-do list
-- [x] Replace minHeap's evaluation function with a comparison
-used to evaluate priority
-	- [x] maybe then rename it as it won't be
-   strictly a min heap
-- [x] Refactor minHeap to use a struct as an argument instead
-of several different parameters, which are a bit messy.
-- [ ] Work out how to handle indices into the heap, if they are
-exposed to the user (if so how) or not (and how to handle
-increase-key &c. in this case)
-- [x] Add the capacity to supply a branch factor for the heap
-at compile time, implementing a more general d-ary/dway heap.
-	- [x] Replace the relative index function so that more than
-	two children can be indexed if the heap supports it.
-- [x] Implement reallocation to automatically adjust store size
-if capacity is reached and store is heap-allocated.
+The code is currently able to solve simple puzzles, but does so
+significantly slower than other implementations of similar algorithms.
+I am currently testing the code using the Valgrind suite of testing
+and profiling tools to identify slow sections of code, and evaluate
+the effects of refactoring them differently
