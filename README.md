@@ -36,12 +36,3 @@ The application of the dway heap data structure is as a priority
 queue used to determine the order to fill in cells. To minimise
 the number of states that must be tested the cell with the fewest
 options is selected.
-
-### Current State of Development
-
-The code is currently able to solve simple puzzles, but does so
-significantly slower than my [other implementation](https://github.com/tim-de/odindoku)
-of the same algorithm.
-I am currently testing the code using the Valgrind suite of testing
-and profiling tools to identify slow sections of code, and evaluate
-the effects of refactoring them differently.
