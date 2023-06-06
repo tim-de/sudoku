@@ -88,7 +88,7 @@ fn getNeighbourPosition(pos: Coordinate, n: usize) Coordinate {
 }
 
 fn cellCompare(a: anytype, b: @TypeOf(a)) bool {
-    return b.options.count() < a.options.count();
+    return b.options.count() > a.options.count();
 }
 
 pub const SudokuGrid = struct {
