@@ -9,7 +9,7 @@ const testing = std.testing;
 /// be higher.
 pub fn DwayHeap(comptime T: type, comptime S: struct {
     branch_factor: usize = 2,
-    compare: fn (T, T) bool = base_comp,
+    compare: fn (T, T) bool,
 }) type {
     // Ensure that the branching factor is at least 2
     const branch_factor: usize = if (S.branch_factor < 2) 2 else S.branch_factor;
