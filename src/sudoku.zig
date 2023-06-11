@@ -5,7 +5,7 @@ const testing = std.testing;
 const DiscreteStack = @import("discrete_stack.zig").DiscreteStack;
 const DwayHeap = @import("dway_heap.zig").DwayHeap;
 const BitSet = std.bit_set.IntegerBitSet(10);
-const CellHeap = DwayHeap(*SudokuCell, .{
+pub const CellHeap = DwayHeap(*SudokuCell, .{
     .branch_factor = 4,
     .compare = cellCompare,
 });
@@ -92,11 +92,10 @@ fn cellCompare(a: anytype, b: @TypeOf(a)) bool {
 }
 
 pub const SudokuGrid = struct {
-    grid: *[9][9]SudokuCell = undefined,
+    grid: [9][9]SudokuCell = [_][9]SudokuCell{[_]SudokuCell{SudokuCell{}} ** 9} ** 9,
     heap: CellHeap = undefined,
 
-    pub fn setup(self: *SudokuGrid, grid: *[9][9]SudokuCell, arr: []const u8, allocator: Allocator) !void {
-        self.grid = grid;
+    pub fn setup(self: *SudokuGrid, arr: []const u8, allocator: Allocator) !void {
         self.heap = try CellHeap.create(81, allocator);
 
         for (arr) |value, ix| {
@@ -108,12 +107,15 @@ pub const SudokuGrid = struct {
             };
         }
         self.assignNeighbours();
+        self.initHeap();
+    }
 
-        for (self.grid) |*row, j| {
-            for (row) |*cell, i| {
+    pub fn initHeap(self: *SudokuGrid) !void {
+        for (self.grid) |*row| {
+            for (row) |*cell| {
                 cell.setOptions();
                 if (cell.options.count() > 0) {
-                    try self.heap.add_elem(&self.grid[j][i]);
+                    try self.heap.add_elem(cell);
                 }
             }
         }
@@ -168,7 +170,7 @@ pub const SudokuGrid = struct {
         try stdout.print("\n", .{});
     }
 
-    fn assignNeighbours(self: *SudokuGrid) void {
+    pub fn assignNeighbours(self: *SudokuGrid) void {
         for (self.grid) |row, j| {
             for (row) |_, i| {
                 var n: usize = 0;
@@ -182,6 +184,9 @@ pub const SudokuGrid = struct {
     }
 
     pub fn depthFirstSearch(self: *SudokuGrid) !bool {
+        if (self.heap.count == 0) {
+            return true;
+        }
         var cell = try self.heap.pop();
         if (cell.options.count() == 0) {
             try self.heap.add_elem(cell);
@@ -191,9 +196,6 @@ pub const SudokuGrid = struct {
         var changed = DiscreteStack(*SudokuCell, 20){};
         while (iterator.next()) |option| {
             cell.value = option;
-            if (self.heap.count == 0) {
-                return true;
-            }
             for (cell.neighbours) |neighbour| {
                 if (neighbour.value == 0 and neighbour.options.isSet(option)) {
                     try changed.push(neighbour);
